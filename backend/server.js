@@ -1,3 +1,4 @@
+
 require("dotenv").config();
 
 const express = require("express");
@@ -9,6 +10,8 @@ const crypto = require("crypto");
 
 const app = express();
 const PORT = Number(process.env.PORT || 5000);
+
+console.log("Loading ProcessMind backend...");
 
 app.use(
   cors({
@@ -33,9 +36,7 @@ const categories = [
 
 const statuses = ["Pending", "In Progress", "Resolved"];
 
-/* =========================================
-   DATABASE MODELS
-   ========================================= */
+/* MODELS */
 
 const feedbackSchema = new mongoose.Schema(
   {
@@ -45,14 +46,12 @@ const feedbackSchema = new mongoose.Schema(
       unique: true,
       index: true,
     },
-
     category: {
       type: String,
       required: true,
       enum: categories,
       default: "Other",
     },
-
     message: {
       type: String,
       required: true,
@@ -60,23 +59,19 @@ const feedbackSchema = new mongoose.Schema(
       minlength: 10,
       maxlength: 5000,
     },
-
     status: {
       type: String,
       enum: statuses,
       default: "Pending",
       index: true,
     },
-
     createdAt: {
       type: Date,
       default: Date.now,
       index: true,
     },
   },
-  {
-    versionKey: false,
-  }
+  { versionKey: false }
 );
 
 const adminSchema = new mongoose.Schema(
@@ -87,23 +82,18 @@ const adminSchema = new mongoose.Schema(
       unique: true,
       trim: true,
     },
-
     passwordHash: {
       type: String,
       required: true,
     },
   },
-  {
-    versionKey: false,
-  }
+  { versionKey: false }
 );
 
 const Feedback = mongoose.model("Feedback", feedbackSchema);
 const Admin = mongoose.model("Admin", adminSchema);
 
-/* =========================================
-   AUTHENTICATION MIDDLEWARE
-   ========================================= */
+/* AUTHENTICATION */
 
 function authenticateAdmin(req, res, next) {
   const authorization = req.headers.authorization;
@@ -114,10 +104,11 @@ function authenticateAdmin(req, res, next) {
     });
   }
 
-  const token = authorization.slice(7);
-
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(
+      authorization.slice(7),
+      process.env.JWT_SECRET
+    );
 
     if (decoded.role !== "admin" || !decoded.adminId) {
       return res.status(403).json({
@@ -125,10 +116,7 @@ function authenticateAdmin(req, res, next) {
       });
     }
 
-    req.admin = {
-      adminId: decoded.adminId,
-    };
-
+    req.admin = { adminId: decoded.adminId };
     next();
   } catch {
     return res.status(401).json({
@@ -137,21 +125,20 @@ function authenticateAdmin(req, res, next) {
   }
 }
 
-/* =========================================
-   HEALTH CHECK
-   ========================================= */
+/* HEALTH CHECK */
 
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,
     message: "ProcessMind backend is running.",
-    database: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    database:
+      mongoose.connection.readyState === 1
+        ? "connected"
+        : "disconnected",
   });
 });
 
-/* =========================================
-   ANONYMOUS STUDENT FEEDBACK
-   ========================================= */
+/* STUDENT FEEDBACK */
 
 app.post("/api/feedback", async (req, res) => {
   try {
@@ -201,9 +188,7 @@ app.post("/api/feedback", async (req, res) => {
   }
 });
 
-/* =========================================
-   ADMIN LOGIN
-   ========================================= */
+/* ADMIN LOGIN */
 
 app.post("/api/admin/login", async (req, res) => {
   try {
@@ -242,14 +227,9 @@ app.post("/api/admin/login", async (req, res) => {
     }
 
     const token = jwt.sign(
-      {
-        adminId: admin.adminId,
-        role: "admin",
-      },
+      { adminId: admin.adminId, role: "admin" },
       process.env.JWT_SECRET,
-      {
-        expiresIn: "2h",
-      }
+      { expiresIn: "2h" }
     );
 
     return res.json({
@@ -266,9 +246,7 @@ app.post("/api/admin/login", async (req, res) => {
   }
 });
 
-/* =========================================
-   VERIFY ADMIN SESSION
-   ========================================= */
+/* VERIFY ADMIN SESSION */
 
 app.get("/api/admin/verify", authenticateAdmin, (req, res) => {
   res.json({
@@ -277,9 +255,7 @@ app.get("/api/admin/verify", authenticateAdmin, (req, res) => {
   });
 });
 
-/* =========================================
-   GET ALL FEEDBACK — ADMIN ONLY
-   ========================================= */
+/* GET FEEDBACK — ADMIN ONLY */
 
 app.get("/api/admin/feedback", authenticateAdmin, async (req, res) => {
   try {
@@ -288,10 +264,7 @@ app.get("/api/admin/feedback", authenticateAdmin, async (req, res) => {
       .limit(500)
       .lean();
 
-    return res.json({
-      success: true,
-      feedback,
-    });
+    return res.json({ success: true, feedback });
   } catch (error) {
     console.error("Fetch feedback error:", error);
 
@@ -301,9 +274,7 @@ app.get("/api/admin/feedback", authenticateAdmin, async (req, res) => {
   }
 });
 
-/* =========================================
-   UPDATE FEEDBACK STATUS — ADMIN ONLY
-   ========================================= */
+/* UPDATE FEEDBACK STATUS — ADMIN ONLY */
 
 app.patch(
   "/api/admin/feedback/:id/status",
@@ -327,10 +298,7 @@ app.patch(
       const feedback = await Feedback.findByIdAndUpdate(
         req.params.id,
         { $set: { status } },
-        {
-          new: true,
-          runValidators: true,
-        }
+        { new: true, runValidators: true }
       );
 
       if (!feedback) {
@@ -354,9 +322,7 @@ app.patch(
   }
 );
 
-/* =========================================
-   ERROR HANDLER
-   ========================================= */
+/* UNKNOWN API ROUTES */
 
 app.use((req, res) => {
   res.status(404).json({
@@ -364,11 +330,19 @@ app.use((req, res) => {
   });
 });
 
-/* =========================================
-   START SERVER AND CONNECT DATABASE
-   ========================================= */
+/* STARTUP */
 
 async function startServer() {
+  console.log("Starting ProcessMind backend...");
+  console.log("PORT configured:", Boolean(process.env.PORT));
+  console.log("JWT_SECRET configured:", Boolean(process.env.JWT_SECRET));
+  console.log("ADMIN_ID configured:", Boolean(process.env.ADMIN_ID));
+  console.log(
+    "ADMIN_PASSWORD configured:",
+    Boolean(process.env.ADMIN_PASSWORD)
+  );
+  console.log("MONGODB_URI configured:", Boolean(process.env.MONGODB_URI));
+
   const jwtSecret = process.env.JWT_SECRET;
   const adminId = process.env.ADMIN_ID;
   const adminPassword = process.env.ADMIN_PASSWORD;
@@ -376,21 +350,28 @@ async function startServer() {
 
   if (!jwtSecret || jwtSecret.length < 32) {
     throw new Error(
-      "JWT_SECRET must be set to a secret string of at least 32 characters."
+      "JWT_SECRET must be at least 32 characters long."
     );
   }
 
   if (!adminId || !adminPassword || adminPassword.length < 12) {
     throw new Error(
-      "Set ADMIN_ID and an ADMIN_PASSWORD of at least 12 characters in .env."
+      "Set ADMIN_ID and ADMIN_PASSWORD (at least 12 characters)."
     );
   }
 
-  if (!mongoUri) {
-    throw new Error("MONGODB_URI is missing from .env.");
+  if (!mongoUri || !mongoUri.startsWith("mongodb")) {
+    throw new Error(
+      "MONGODB_URI is missing or does not start with mongodb:// or mongodb+srv://."
+    );
   }
 
-  await mongoose.connect(mongoUri);
+  console.log("Connecting to MongoDB...");
+
+  await mongoose.connect(mongoUri, {
+    serverSelectionTimeoutMS: 15000,
+  });
+
   console.log("MongoDB connected successfully.");
 
   const existingAdmin = await Admin.findOne({ adminId });
@@ -403,18 +384,27 @@ async function startServer() {
       passwordHash,
     });
 
-    console.log(`Initial administrator "${adminId}" created.`);
+    console.log("Initial administrator account created.");
   } else {
     console.log("Existing administrator account found.");
   }
 
-  app.listen(PORT, () => {
-    console.log(`ProcessMind backend running at http://localhost:${PORT}`);
-    console.log(`Health check: http://localhost:${PORT}/api/health`);
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`ProcessMind backend listening on port ${PORT}.`);
   });
 }
 
 startServer().catch((error) => {
-  console.error("Failed to start ProcessMind:", error.message);
+  console.error("Failed to start ProcessMind:");
+  console.error(error);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught exception:", error);
   process.exit(1);
 });
